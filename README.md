@@ -93,9 +93,9 @@ Notes are saved automatically to `board_notes.txt` in the app folder and restore
 ## CSV Format
 
 ```
-Timestamp,Temperature_C,Humidity_pct
-2026-03-24 16:10:29,23.45,42.31
-2026-03-24 16:11:29,23.48,42.15
+Date,Time,Temperature_C,Humidity_pct
+2026-03-24,16:10:29,23.45,42.31
+2026-03-24,16:11:29,23.48,42.15
 ```
 
 ---
@@ -213,9 +213,9 @@ Include this file when reporting issues.
 ## CSVフォーマット
 
 ```
-Timestamp,Temperature_C,Humidity_pct
-2026-03-24 16:10:29,23.45,42.31
-2026-03-24 16:11:29,23.48,42.15
+Date,Time,Temperature_C,Humidity_pct
+2026-03-24,16:10:29,23.45,42.31
+2026-03-24,16:11:29,23.48,42.15
 ```
 
 ---
@@ -295,69 +295,3 @@ Timestamp,Temperature_C,Humidity_pct
 
 Normal reboot: `{0x00, 0x00, 0x00}`
 Enter OTA mode: `{0x01, 0x07, <sectors>}`
-
-## Known Firmware Bug: err2 003
-
-**Affected versions:** < v1.0.0 (fixed in v1.0.0, 2025-03-27)
-
-**Root cause:** Writing a new logging interval when samples exist triggers:
-1. `ItemStore_DeleteAllItems` (async flash erase of old samples) — can take 1-3 seconds
-2. After erase completes: `ComputeCrcOnActualSetting()` → NVM save
-
-The firmware's sensor controller can get "stuck" during this sequence (exact mechanism
-is a CRC peripheral race or state machine deadlock — fixed in v1.0.0 changelog:
-"Avoid sensor controller getting stuck").
-
-**Critical: Do NOT reboot during NVM save.** The flash erase + CRC + write sequence
-takes several seconds. Rebooting mid-save results in lost settings (board reverts to
-previous saved interval). Our app waits 4 seconds after write, then reads back to
-confirm persistence.
-
-**If err2 003 appears:** Pull battery for 10 seconds, reinsert. Board recovers.
-
-## Arduino BLE Gadget Reference
-
-The `arduino-ble-gadget` library (https://github.com/Sensirion/arduino-ble-gadget)
-implements the same GATT protocol on ESP32 (NimBLE). Key differences from SHT43 DemoBoard:
-
-- Uses **RAM ring buffer** (not flash) → interval change just resets buffer (no crash risk)
-- Default interval: 600000 ms (10 minutes, same as SHT43)
-- Download header format (20 bytes): bytes 4-5 sample type, 6-9 interval ms LE, 10-13 age ms, 14-15 count
-- Download triggered by **subscribing to notifications on 0x8004** (not by writing to 0x8003)
-- 0x8003 just caches the requested sample count
-
-## Firmware Update Options
-
-### Option A: OTA (Over-The-Air) via BLE — No Soldering
-
-1. Write `{0x01, 0x07, N}` to the Reboot characteristic (enters ST OTA bootloader)
-2. Board reboots into ST's FUOTA (Firmware Update Over The Air) service
-3. Upload new firmware using ST's BLE OTA protocol
-4. Requires: ST BLE Toolbox app (iOS/Android) OR custom OTA client
-5. Requires: The compiled `.bin` firmware file from the repo
-
-### Option B: JTAG/SWD — Requires Soldering
-
-1. Solder wires to 5 pads on the board backside:
-   - 3V, SWCLK, SWDIO, NRST, GND
-2. Connect to J-Link or ST-Link debugger
-3. **Remove battery** before applying external power!
-4. Use [STM32CubeProgrammer](https://www.st.com/en/development-tools/stm32cubeprog.html) to flash `.hex` file
-5. Alternatively use Ozone (Segger) for debugging + flash
-
-### Building Firmware from Source
-
-```bash
-# Prerequisites: CMake 3.22+, Ninja, gcc-arm-none-eabi 10.3
-cmake -B build/release -DCMAKE_MAKE_PROGRAM=ninja -DCMAKE_BUILD_TYPE=release -G Ninja
-cmake --build build/release
-```
-
-## Firmware Changelog (Key Versions)
-
-| Version | Date | Key Changes |
-|---------|------|-------------|
-| **1.0.0** | 2025-03-27 | **Fix: "Avoid sensor controller getting stuck"** (err2 003 fix), default interval 10min |
-| v0.6.0 | 2024-06-04 | Stabilize data download, pairing screen, secure pairing, I2C 400KHz |
-| v0.5.0 | 2023-11-15 | Fix hard-fault on enumerate after delete-all |
-| v0.4.0 | 2023-10-05 | Implement persistent item store, all GATT services |
