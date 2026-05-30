@@ -238,7 +238,7 @@ Date,Time,Temperature_C,Humidity_pct
 
 ---
 
-*v2.6 | 2026-05-23 | Sensirion SHT43 DemoBoard*
+*v2.7 | 2026-05-30 | Sensirion SHT43 DemoBoard*
 
 ---
 ---
